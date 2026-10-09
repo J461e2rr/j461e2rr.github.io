@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J4J4J4</title>
+<style>
+  :root { --font: Arial, Helvetica, sans-serif; }
+  html, body { margin: 0; height: 100%; background: #fff; overflow: hidden; font: 12px/1.2 var(--font); color: #111; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
+  button { font: inherit; color: inherit; }
+
+  #show, #hub, .node {
+    font: 12px/1.2 var(--font); letter-spacing: 0; text-transform: none;
+    color: #111; background: #fff; border: 1px solid transparent; border-radius: 0;
+    padding: 2px 4px; margin: 0; cursor: pointer; white-space: nowrap; text-decoration: none;
+  }
+  #show { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; background: none; }
+  #show:hover { text-decoration: underline; }
+  #show.hidden { visibility: hidden; }
+
+  #hub { position: fixed; left: 50%; top: 50%; z-index: 3; transform: translate(-50%, -50%);
+         opacity: 0; visibility: hidden; pointer-events: none; }
+  #hub.pop { animation: pop .14s steps(4) 1; }
+  @keyframes pop { from { transform: translate(-50%, -50%) scale(2.2); } to { transform: translate(-50%, -50%) scale(1); } }
+
+  #hl { position: fixed; left: 50%; top: 50%; z-index: 3; margin: 0; padding: 2px 4px; background: #fff;
+        border: 0; color: #111; cursor: pointer;
+        font: 12px/1.2 var(--font); text-align: center; white-space: nowrap;
+        transform: translate(-50%, -50%); visibility: hidden; pointer-events: none; }
+  #hl.pop { animation: pop2 .16s steps(4) 1; }
+  @keyframes pop2 { from { transform: translate(-50%, -50%) scale(1.5); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+  .text { cursor: default; }
+
+  .node { position: fixed; left: 0; top: 0; z-index: 2; opacity: 0; will-change: transform, opacity; }
+  .link { text-decoration: underline; }
+  .dead { color: #999; cursor: default; }
+  .focus { border-color: #111 !important; }
+  #hub:focus-visible, .node:focus-visible { outline: 1px dotted #111; }
+
+  .img { width: 96px; height: 96px; box-sizing: border-box; padding: 5px; border: 1px solid #ddd; overflow: hidden; }
+  .img > span { display: block; width: 100%; height: 100%; overflow: hidden; background: #fff; }
+  .img.big { width: 230px; height: 230px; }
+  .img.big img { filter: saturate(1.8) contrast(1.25); }
+  .img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  #lb { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center;
+        background: rgba(255,255,255,.95); cursor: zoom-out; }
+  #lb.on { display: flex; }
+  #lb img { max-width: 82vw; max-height: 82vh; background: #fff; padding: 8px; border: 1px solid #ddd; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button id="show" type="button">show</button>
+<button id="hub" type="button" aria-expanded="false">J4J4J4</button>
+<button id="hl" type="button">I'm a content creator, bitch</button>
+<div id="lb"><img alt=""></div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const btn = document.getElementById('show');
+  const hub = document.getElementById('hub');
+  const FONT = 'Arial, Helvetica, sans-serif';
+
+  let W = 0, H = 0, dpr = 1;
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    relayout();
+  }
+
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const easeOutExpo = t => t >= 1 ? 1 : 1 - Math.pow(2, -10 * t);
+  const easeInExpo = t => t <= 0 ? 0 : Math.pow(2, 10 * (t - 1));
+  const easeOutBack = t => { const c = 2.4; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+
+  // ================= intro (seconds after click on "show") =================
+  const T_SHAKE = 0.6;
+  const T_BURST = T_SHAKE + 0.75;
+  const T_COUNT = T_BURST + 0.45;
+  const STEP = 0.55;
+  const T_GATHER = T_COUNT + 4 * STEP + 0.5;
+  const D_GATHER = 0.4;                          // slams into the centre
+  const T_HUB = T_GATHER + D_GATHER + 0.18;      // J4J4J4 appears at once
+
+  let started = false, t0 = 0, hubReady = false, introDone = false, morphing = false;
+  const hl = document.getElementById('hl');
+
+  // click on the phrase: it vanishes at once and the menu flies out of the centre
+  hl.addEventListener('click', () => {
+    if (morphing) return;
+    morphing = true;
+    hl.style.visibility = 'hidden';
+    hl.style.pointerEvents = 'none';
+    hubReady = true;
+    hub.style.visibility = 'visible';
+    hub.style.pointerEvents = 'auto';
+    hub.classList.add('pop');
+    openMenu();
+  });
+  let particles = [];
+  let word = null;
+
+  // ================= background: wavy dot grid =================
+  const GAP = 26;
+  // every piece of text bends the dot grid around it, like a lens / black hole
+  function gatherLenses() {
+    const L = [];
+    const add = (x, y, w, h, s) => { if (s > 0.05) L.push({ x, y, a: w / 2 + 34, b: h / 2 + 34, s }); };
+    if (!started) { const r = btn.getBoundingClientRect(); add(r.left + r.width / 2, r.top + r.height / 2, r.width, r.height, 1); }
+    if (hl.style.visibility === 'visible') add(W / 2, H / 2, hl.offsetWidth, hl.offsetHeight, 1);
+    if (hubReady) add(W / 2, H / 2, hub.offsetWidth, hub.offsetHeight, hubDim);
+    for (const n of nodes) add(n.dx, n.dy, n.w, n.h, n.s * n.dim);
+    return L;
+  }
+
+  function drawDots(t) {
+    ctx.fillStyle = '#000';
+    const lenses = gatherLenses();
+    const cols = Math.ceil(W / GAP) + 1, rows = Math.ceil(H / GAP) + 1;
+    const ox = (W - (cols - 1) * GAP) / 2, oy = (H - (rows - 1) * GAP) / 2;
+    const cx = W / 2, cy = H / 2;
+    for (let j = 0; j < rows; j++) {
+      const y0 = oy + j * GAP;
+      for (let i = 0; i < cols; i++) {
+        const x0 = ox + i * GAP;
+        const d = Math.hypot(x0 - cx, y0 - cy);
+        const v = Math.sin(d * 0.012 - t * 1.1)
+                + Math.sin(x0 * 0.009 + t * 0.7)
+                + Math.sin(y0 * 0.011 - t * 0.55 + x0 * 0.004);
+        const k = (v + 3) / 6;
+        let x = x0, y = y0, grow = 1, boost = 0;
+        for (const l of lenses) {
+          const dx = x0 - l.x, dy = y0 - l.y;
+          const e2 = (dx * dx) / (l.a * l.a) + (dy * dy) / (l.b * l.b);
+          if (e2 > 9) continue;
+          const g = Math.exp(-e2 * 0.9) * l.s;
+          x += dx * g * 0.7;          // pushed outward = magnified
+          y += dy * g * 0.7;
+          grow += g * 2.2;            // and the dots swell
+          boost += g * 0.25;
+        }
+        ctx.globalAlpha = Math.min(0.8, 0.06 + k * 0.3 + boost);
+        ctx.beginPath();
+        ctx.arc(x, y, (0.3 + k * k * 0.85) * grow, 0, 6.2832);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ================= intro: show -> 5s -> 4-3-2-1 -> centre =================
+  function start() {
+    if (started) return;
+    started = true;
+    const r = btn.getBoundingClientRect();
+    const cs = getComputedStyle(btn);
+    word = { cx: r.left + r.width / 2, cy: r.top + r.height / 2, font: `${cs.fontSize} ${FONT}` };
+    btn.classList.add('hidden');
+
+    const pw = Math.ceil(r.width + 40), ph = Math.ceil(r.height + 40);
+    const off = document.createElement('canvas');
+    off.width = pw; off.height = ph;
+    const o = off.getContext('2d');
+    o.font = word.font; o.textAlign = 'center'; o.textBaseline = 'middle';
+    o.fillText('show', pw / 2, ph / 2);
+    const data = o.getImageData(0, 0, pw, ph).data;
+    const pts = [];
+    for (let y = 0; y < ph; y++) for (let x = 0; x < pw; x++)
+      if (data[(y * pw + x) * 4 + 3] > 90) pts.push([x - pw / 2, y - ph / 2]);
+
+    const N = 10;
+    const cx = W / 2, cy = H / 2;
+    particles = [];
+    for (let n = 0; n < N; n++) {
+      const p = pts[(Math.random() * pts.length) | 0] || [0, 0];
+      const ang = Math.random() * 6.2832;
+      const rad = 0.3 + Math.random() * 0.7;
+      particles.push({
+        hx: word.cx + p[0] - cx, hy: word.cy + p[1] - cy,
+        tx: Math.cos(ang) * rad * 150,
+        ty: Math.sin(ang) * rad * 150,
+        size: 16 + Math.random() * 10,
+        alpha: 0.5 + Math.random() * 0.5,
+        delay: Math.random() * 0.2,
+        ph1: Math.random() * 6.28, ph2: Math.random() * 6.28,
+        fr: 0.8 + Math.random() * 1.2,
+        fx: (Math.random() - .5) * 14, fy: (Math.random() - .5) * 14,
+        burstDelay: Math.random() * 0.12,
+        gatherDelay: Math.random() * 0.1
+      });
+    }
+    t0 = performance.now() / 1000;
+  }
+  btn.addEventListener('click', start);
+
+  function drawIntro(t) {
+    const s = t - t0;
+    const cx = W / 2, cy = H / 2;
+
+    // the headline appears at once where the digits landed
+    if (!introDone && s >= T_HUB) {
+      introDone = true;
+      hl.style.visibility = 'visible';
+      hl.style.pointerEvents = 'auto';
+      hl.classList.add('pop');
+    }
+    if (introDone) return;
+
+    // word trembles harder and harder, then bursts
+    if (s < T_SHAKE + 0.08) {
+      const u = clamp(s / T_SHAKE);
+      const amp = 0.5 + u * u * 6;
+      ctx.save();
+      ctx.globalAlpha = s < T_SHAKE ? 1 : 0;
+      ctx.fillStyle = '#111';
+      ctx.font = word.font; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const jx = (Math.sin(s * 131) + Math.sin(s * 197 + 1)) * amp * 0.5;
+      const jy = (Math.sin(s * 163 + 2) + Math.sin(s * 241 + 3)) * amp * 0.5;
+      ctx.fillText('show', word.cx + jx, word.cy + jy);
+      ctx.restore();
+    }
+
+    ctx.fillStyle = '#111';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const p of particles) {
+      if (s < T_SHAKE) continue;
+
+      const bu = clamp((s - T_SHAKE - p.burstDelay) / (T_BURST - T_SHAKE - 0.12));
+      const be = easeOutExpo(bu);
+      let x = lerp(p.hx, p.tx, be);
+      let y = lerp(p.hy, p.ty, be);
+
+      // sharp tremble that dies down, then a small drift
+      const trem = (1 - be) * 10 + (1 - bu) * 2;
+      x += Math.sin(s * 90 * p.fr + p.ph1) * trem + Math.sin(s * p.fr + p.ph1) * 2 * bu;
+      y += Math.cos(s * 97 * p.fr + p.ph2) * trem + Math.cos(s * 0.9 * p.fr + p.ph2) * 2 * bu;
+
+      // abrupt, straight, upright pull to the centre
+      if (s > T_GATHER) {
+        const gu = clamp((s - T_GATHER - p.gatherDelay) / D_GATHER);
+        const ge = easeInExpo(gu);
+        x = x * (1 - ge) + p.fx * ge;
+        y = y * (1 - ge) + p.fy * ge;
+      }
+
+      let digit = 5, pop = 1;
+      const cs = s - T_COUNT - p.delay;
+      if (cs >= 0) {
+        const step = Math.min(4, Math.floor(cs / STEP) + 1);
+        digit = Math.max(1, 5 - step);
+        const within = cs - (step - 1) * STEP;
+        if (cs < 4 * STEP) pop = 1 + 0.7 * (1 - easeOutBack(clamp(within / 0.18)));
+      }
+
+      ctx.globalAlpha = p.alpha;
+      ctx.font = `${p.size * pop}px ${FONT}`;
+      ctx.fillText(digit, cx + x, cy + y);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ================= menu =================
+  const q = s => '"' + s + '"';
+  const TREE = [
+    { label: 'ROBLOX', kids: [
+      { t: 'link', label: q('J461e2rr team'), href: 'https://www.roblox.com/communities/35154220/J461e2rr-team#!/about' },
+      { t: 'link', label: q('Studio.PNG'),     href: 'https://www.roblox.com/communities/1090974271/Studio-png#!/about' }
+    ]},
+    { label: 'GODOT ENGINE', kids: [
+      { t: 'dead', label: 'NOT YET' }
+    ]},
+    { label: 'PROCREATE', kids: [
+      { t: 'img', big: true, src: 'assets/procreate-1.webp', alt: 'Procreate drawing' }
+    ]},
+    { label: 'YOUTUBE', kids: [
+      { t: 'link', label: q('J4J4J4'),     href: 'https://www.youtube.com/@j461e2rr' },
+      { t: 'link', label: q('Kall1s1o'),    href: 'https://www.youtube.com/@kall1s1oyeah' },
+      { t: 'link', label: q('Pakost` Inc'), href: 'https://www.youtube.com/@PakostInc' }
+    ]},
+    { label: 'PROJECTS', kids: [
+      { t: 'img', src: 'assets/hello.png',    alt: 'HELLO my name is' },
+      { t: 'img', src: 'assets/logo.webp',    alt: 'Logo' },
+      { t: 'img', src: 'assets/yinyang.webp', alt: 'Yin yang', zoom: 1.9 }
+    ]},
+    { label: 'FEATURES', linkKids: true, kids: [
+      { t: 'text', label: '1. Can produce games on Roblox.' },
+      { t: 'text', label: '2. Can make games by myself.' },
+      { t: 'text', label: '3. Can be incredibly creative.' },
+      { t: 'text', label: '4. Unique content creator.' }
+    ]},
+    { label: 'CONTACT', kids: [
+      { t: 'link', label: 'TELEGRAM',  href: 'https://t.me/j461e2rr' },
+      { t: 'link', label: 'INSTAGRAM', href: 'https://instagram.com/j461e2rr?igsh=Nm93NXJycXIxMGd1' },
+      { t: 'link', label: 'X',         href: 'https://x.com/j461e2rr' },
+      { t: 'link', label: 'TIKTOK',    href: 'https://tiktok.com/@j461e2rr?_r=1&_t=ZP-92RSeK6IfwU' }
+    ]}
+  ];
+
+  const hubNode = { x: 0, y: 0, dx: 0, dy: 0, w: 60, h: 18 };
+  let nodes = [];          // every live node (including ones flying back)
+  let tops = [];
+  let menuOpen = false;
+  let focus = null;        // null = J4J4J4, otherwise the open top node
+  let hubDim = 1;
+  const now = () => performance.now() / 1000;
+
+  function makeNode(def, parent, depth, delay) {
+    let el;
+    if (def.t === 'link') {
+      el = document.createElement('a');
+      el.href = def.href; el.target = '_blank'; el.rel = 'noopener noreferrer';
+      el.className = 'node link';
+      el.textContent = def.label;
+    } else if (def.t === 'dead' || def.t === 'text') {
+      el = document.createElement('span');
+      el.className = 'node ' + (def.t === 'dead' ? 'dead' : 'text');
+      el.textContent = def.label;
+    } else if (def.t === 'img') {
+      el = document.createElement('button'); el.type = 'button';
+      el.className = 'node img' + (def.big ? ' big' : '');
+      const wrap = document.createElement('span');
+      const im = document.createElement('img');
+      im.src = def.src; im.alt = def.alt || ''; im.draggable = false;
+      if (def.zoom) im.style.transform = `scale(${def.zoom})`;
+      wrap.appendChild(im); el.appendChild(wrap);
+      el.addEventListener('click', () => openLightbox(def.src, def.alt));
+    } else {
+      el = document.createElement('button'); el.type = 'button';
+      el.className = 'node top';
+      el.textContent = def.label;
+      el.setAttribute('aria-expanded', 'false');
+    }
+    document.body.appendChild(el);
+    const n = {
+      el, def, parent, depth, kids: [], open: false, closing: false,
+      x: parent.x, y: parent.y, tx: parent.x, ty: parent.y, dx: parent.x, dy: parent.y,
+      s: 0, dim: 1, appearAt: now() + delay, phase: Math.random() * 6.28,
+      w: el.offsetWidth || 60, h: el.offsetHeight || 18,
+      fx: 0, fy: 0,          // top-level: random place as a fraction of the screen
+      ox: 0, oy: 0           // child: random offset from its parent
+    };
+    if (depth === 0) el.addEventListener('click', () => toggleBranch(n));
+    nodes.push(n);
+    return n;
+  }
+
+  const hit = (ax, ay, aw, ah, bx, by, bw, bh, pad) =>
+    Math.abs(ax - bx) < (aw + bw) / 2 + pad && Math.abs(ay - by) < (ah + bh) / 2 + pad;
+  const mx = n => n.w / 2 + 8, my = n => n.h / 2 + 8;
+  const place = (n, x, y) => { n.tx = clamp(x, mx(n), W - mx(n)); n.ty = clamp(y, Math.max(my(n), 64), H - my(n)); };
+
+  // everything lands at random: top-level anywhere on the screen, children around their parent
+  function scatterTop(n) {
+    let best = null;
+    for (let k = 0; k < 80; k++) {
+      const fx = rnd(0.06, 0.94), fy = rnd(0.08, 0.92);
+      const x = fx * W, y = fy * H;
+      let ok = !hit(x, y, n.w, n.h, W / 2, H / 2, 120, 60, 40);
+      for (const o of tops) if (o !== n && o.fx && hit(x, y, n.w, n.h, o.tx, o.ty, o.w, o.h, 50)) ok = false;
+      best = { fx, fy };
+      if (ok) break;
+    }
+    n.fx = best.fx; n.fy = best.fy;
+    place(n, n.fx * W, n.fy * H);
+  }
+  function scatterKid(c, p) {
+    let best = null;
+    for (let k = 0; k < 100; k++) {
+      const a = rnd(0, 6.2832), r = rnd(70, 120 + k * 3);
+      const x = clamp(p.tx + Math.cos(a) * r, mx(c), W - mx(c));
+      const y = clamp(p.ty + Math.sin(a) * r, Math.max(my(c), 64), H - my(c));
+      let ok = !hit(x, y, c.w, c.h, W / 2, H / 2, 70, 24, 10);
+      for (const o of nodes) {
+        if (o === c || o.closing || o.s === undefined) continue;
+        if (o.depth === 0 && !tops.includes(o)) continue;
+        if (hit(x, y, c.w, c.h, o.tx, o.ty, o.w, o.h, 10)) { ok = false; break; }
+      }
+      best = { a, r };
+      if (ok) break;
+    }
+    c.ox = Math.cos(best.a) * best.r; c.oy = Math.sin(best.a) * best.r;
+    place(c, p.tx + c.ox, p.ty + c.oy);
+  }
+  function relayout() {
+    hubNode.x = hubNode.dx = W / 2; hubNode.y = hubNode.dy = H / 2;
+    tops.forEach(n => place(n, n.fx * W, n.fy * H));
+    tops.forEach(p => p.kids.forEach(c => place(c, p.tx + c.ox, p.ty + c.oy)));
+  }
+
+  function closeBranch(n) {
+    if (!n.open) return;
+    n.open = false;
+    n.el.setAttribute('aria-expanded', 'false');
+    n.el.classList.remove('focus');
+    n.kids.forEach(c => c.closing = true);
+    n.kids = [];
+  }
+  function setFocus(n) {
+    focus = n;
+    hub.classList.toggle('focus', menuOpen && !n);
+  }
+  function toggleBranch(n) {
+    if (n.open) { closeBranch(n); setFocus(null); return; }
+    tops.forEach(closeBranch);
+    n.open = true;
+    n.el.setAttribute('aria-expanded', 'true');
+    n.el.classList.add('focus');
+    n.kids = n.def.kids.map((d, i) => makeNode(d, n, 1, i * 0.04));
+    n.kids.forEach(c => scatterKid(c, n));
+    setFocus(n);
+  }
+
+  function openMenu() {
+    menuOpen = true;
+    hub.setAttribute('aria-expanded', 'true');
+    tops = [];
+    TREE.forEach((d, i) => {
+      const n = makeNode(d, hubNode, 0, i * 0.04);
+      tops.push(n);
+      scatterTop(n);
+    });
+    setFocus(null);
+  }
+  function closeMenu() {
+    menuOpen = false;
+    hub.setAttribute('aria-expanded', 'false');
+    tops.forEach(closeBranch);
+    tops.forEach(n => n.closing = true);
+    tops = [];
+    setFocus(null);
+  }
+  hub.addEventListener('click', () => menuOpen ? closeMenu() : openMenu());
+
+  // lightbox
+  const lb = document.getElementById('lb'), lbImg = lb.querySelector('img');
+  function openLightbox(src, alt) { lbImg.src = src; lbImg.alt = alt || ''; lb.classList.add('on'); }
+  lb.addEventListener('click', () => lb.classList.remove('on'));
+  window.addEventListener('keydown', e => { if (e.key === 'Escape') lb.classList.remove('on'); });
+
+  // ---- per-frame update
+  function updateNodes(dt, t) {
+    const k = 1 - Math.exp(-dt * 16);
+    const kd = 1 - Math.exp(-dt * 20);
+    const tNow = now();
+    hubNode.x = hubNode.dx = W / 2; hubNode.y = hubNode.dy = H / 2;
+
+    // the focus: everything except the focused thing steps back
+    const hubTarget = (!menuOpen || !focus) ? 1 : 0.22;
+    hubDim += (hubTarget - hubDim) * kd;
+    if (hubReady && !hub.classList.contains('pop-hold')) hub.style.opacity = hubDim;
+
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      if (tNow < n.appearAt) { n.x = n.dx = n.parent.dx; n.y = n.dy = n.parent.dy; continue; }
+      let st = 1;
+      if (n.closing) { n.tx = n.parent.x; n.ty = n.parent.y; st = 0; }
+      n.x += (n.tx - n.x) * k;
+      n.y += (n.ty - n.y) * k;
+      n.s += (st - n.s) * Math.min(1, k * 1.2);
+      if (n.closing && n.s < 0.04) { n.el.remove(); nodes.splice(i, 1); continue; }
+
+      const dimTarget = (n.depth === 0 && focus && focus !== n) ? 0.22 : 1;
+      n.dim += (dimTarget - n.dim) * kd;
+      n.dx = n.x + Math.sin(t * 0.8 + n.phase) * 1.5 * n.s;
+      n.dy = n.y + Math.cos(t * 0.7 + n.phase) * 1.5 * n.s;
+      const st2 = n.el.style;
+      st2.opacity = clamp(n.s * 1.3) * n.dim;
+      st2.transform = `translate(${n.dx}px, ${n.dy}px) translate(-50%, -50%) scale(${0.5 + 0.5 * n.s})`;
+      st2.pointerEvents = (n.closing || n.s < 0.6) ? 'none' : 'auto';
+    }
+  }
+
+  // one thin line from J4J4J4 to every top-level word, nothing else is connected
+  function drawLines() {
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 1;
+    for (const n of nodes) {
+      if (n.depth !== 0 && !n.parent.def.linkKids) continue;
+      const al = n.s * n.dim;
+      if (al < 0.02) continue;
+      ctx.globalAlpha = al * 0.4;
+      ctx.beginPath();
+      ctx.moveTo(n.parent.dx, n.parent.dy);
+      ctx.lineTo(n.dx, n.dy);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ================= loop =================
+  let last = performance.now() / 1000;
+  function frame(ms) {
+    const t = ms / 1000;
+    const dt = Math.min(0.05, Math.max(0.001, t - last)); last = t;
+    ctx.clearRect(0, 0, W, H);
+    drawDots(t);
+    if (started) drawIntro(now());
+    updateNodes(dt, t);
+    drawLines();
+    requestAnimationFrame(frame);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
