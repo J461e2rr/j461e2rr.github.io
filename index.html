@@ -2,11 +2,11 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#000000">
 <title>J4J4J4</title>
 <style>
   :root { --font: Arial, Helvetica, sans-serif; }
-  html, body { margin: 0; height: 100%; background: #fff; font: 12px/1.2 var(--font); color: #111; }
+  html, body { margin: 0; height: 100%; background: #000; font: 12px/1.2 var(--font); color: #fff; }
   html { -webkit-text-size-adjust: 100%; overscroll-behavior: none; overflow-x: hidden; overflow-y: hidden; scrollbar-width: none; }
   html.scrolly { overflow-y: auto; }
   html::-webkit-scrollbar { display: none; }
@@ -14,9 +14,9 @@
   /* ---- page 2: INFO / HISTORY / FUTURE ---- */
   #p2 { position: absolute; left: 0; top: 100vh; width: 100%; height: 100vh; z-index: 2; display: none; opacity: 0; pointer-events: none; }
   .pi { position: absolute; transform: translate(-50%, -50%); }
-  .pi[aria-expanded="true"] { border-color: #111; }
+  .pi[aria-expanded="true"] { border-color: #fff; }
   #card { position: absolute; left: 50%; top: 56%; width: min(380px, 88vw); box-sizing: border-box; padding: 14px;
-          background: #fff; border: 1px solid #111; border-radius: 0;
+          background: #000; border: 1px solid #fff; border-radius: 0;
           transform: translate(-50%, -50%); visibility: hidden; }
   /* before the play button is pressed the frame is an empty white box with a play triangle and a speaker */
   #card.locked { height: 250px; }
@@ -46,10 +46,10 @@
     50%      { transform: scale(.96, 1.05) rotate(-1.5deg); }
   }
   #card .ch { display: flex; gap: 12px; align-items: flex-start; }
-  #card .ch img { width: 84px; height: 84px; object-fit: cover; border-radius: 0; flex: none; display: block; background: #111; }
+  #card .ch img { width: 84px; height: 84px; object-fit: cover; border-radius: 0; flex: none; display: block; background: #222; }
   #card.playing .ch img { animation: sway 3.2s ease-in-out infinite; }
   #card h2 { margin: 0 0 4px; font: 18px/1.1 var(--font); }
-  #card .sub { margin: 0 0 10px; color: #555; }
+  #card .sub { margin: 0 0 10px; color: #aaa; }
   #card .btns { display: flex; gap: 6px; align-items: center; }
   #card .btns button { background: #fff; border: 1px solid #111; border-radius: 0; padding: 4px 10px; cursor: pointer; font: 12px/1.2 var(--font); }
   #card .btns button:disabled { opacity: .35; cursor: default; }
@@ -64,15 +64,15 @@
   #sphost iframe { display: block; border: 0; border-radius: 0 !important; }
   #sphost.drag { transition: opacity .06s linear, transform .22s cubic-bezier(.2, 1.5, .4, 1); }
   #sphandle { position: absolute; left: 0; top: -15px; width: 100%; height: 15px; line-height: 15px; text-align: center;
-              background: #fff; color: #999; font-size: 10px; cursor: grab; user-select: none; touch-action: none; }
+              background: #000; color: #999; font-size: 10px; cursor: grab; user-select: none; touch-action: none; }
   #sphost.drag #sphandle { cursor: grabbing; }
-  #scrollhint { position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 2; color: #777; pointer-events: none; opacity: 0; }
+  #scrollhint { position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 2; color: #aaa; pointer-events: none; opacity: 0; }
   canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
   button { font: inherit; color: inherit; }
 
   #show, #hub, .node, .pi {
     font: 12px/1.2 var(--font); letter-spacing: 0; text-transform: none;
-    color: #111; background: #fff; border: 1px solid transparent; border-radius: 0;
+    color: #fff; background: #000; border: 1px solid transparent; border-radius: 0;
     padding: 2px 4px; margin: 0; cursor: pointer; white-space: nowrap; text-decoration: none;
   }
   button, a { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
@@ -96,28 +96,28 @@
   #hub.pop { animation: pop .14s steps(4) 1; }
   @keyframes pop { from { transform: translate(-50%, -50%) scale(2.2); } to { transform: translate(-50%, -50%) scale(1); } }
 
-  #hl { position: fixed; left: 50%; top: 50%; z-index: 3; margin: 0; padding: 2px 4px; background: #fff;
-        border: 0; color: #111; cursor: pointer;
+  #hl { position: fixed; left: 50%; top: 50%; z-index: 3; margin: 0; padding: 2px 4px; background: #000;
+        border: 0; color: #fff; cursor: pointer;
         font: 12px/1.2 var(--font); text-align: center; white-space: nowrap;
         transform: translate(-50%, -50%); visibility: hidden; pointer-events: none; }
   .text { cursor: default; }
 
   .node { position: fixed; left: 0; top: 0; z-index: 2; opacity: 0; will-change: transform, opacity; }
   .link { text-decoration: underline; }
-  .dead { color: #999; cursor: default; }
-  .focus { border-color: #111 !important; }
-  #hub:focus-visible, .node:focus-visible { outline: 1px dotted #111; }
+  .dead { color: #777; cursor: default; }
+  .focus { border-color: #fff !important; }
+  #hub:focus-visible, .node:focus-visible { outline: 1px dotted #fff; }
 
-  .img { width: 96px; height: 96px; box-sizing: border-box; padding: 5px; border: 1px solid #ddd; overflow: hidden; }
+  .img { width: 96px; height: 96px; box-sizing: border-box; padding: 5px; background: #fff; border: 0; overflow: hidden; }
   .img > span { display: block; width: 100%; height: 100%; overflow: hidden; background: #fff; }
   .img.big { width: 230px; height: 230px; }
   .img.big img { filter: saturate(1.8) contrast(1.25); }
   .img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
   #lb { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center;
-        background: rgba(255,255,255,.95); cursor: zoom-out; }
+        background: rgba(0,0,0,.94); cursor: zoom-out; }
   #lb.on { display: flex; }
-  #lb img { max-width: 82vw; max-height: 82vh; background: #fff; padding: 8px; border: 1px solid #ddd; }
+  #lb img { max-width: 82vw; max-height: 82vh; background: #fff; padding: 8px; border: 0; }
 </style>
 </head>
 <body>
@@ -131,7 +131,7 @@
   <article id="card" class="locked" aria-live="polite">
     <div class="cover">
       <button type="button" id="bigplay" aria-label="play"><svg class="big" viewBox="0 0 24 24"><path d="M5 3l16 9-16 9z" fill="#d9d9d9"/></svg></button>
-      <button type="button" id="bigsnd" aria-label="sound on/off"><svg class="small" viewBox="0 0 16 16" fill="none" stroke="#111" stroke-width="1.2" stroke-linecap="round"><path d="M2 6h3l4-3v10l-4-3H2z"/><path class="s-on" d="M11.5 5.5a3.5 3.5 0 0 1 0 5M13 3.5a6 6 0 0 1 0 9"/><path class="s-off" d="M11 5l4 6M15 5l-4 6" style="display:none"/></svg></button>
+      <button type="button" id="bigsnd" aria-label="sound on/off"><svg class="small" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round"><path d="M2 6h3l4-3v10l-4-3H2z"/><path class="s-on" d="M11.5 5.5a3.5 3.5 0 0 1 0 5M13 3.5a6 6 0 0 1 0 9"/><path class="s-off" d="M11 5l4 6M15 5l-4 6" style="display:none"/></svg></button>
     </div>
     <div class="ch">
       <img alt="">
@@ -220,7 +220,7 @@
   }
 
   function drawDots(t) {
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = '#fff';
     const lenses = gatherLenses();
     const cols = Math.ceil(W / GAP) + 1, rows = Math.ceil(H / GAP) + 1;
     const ox = (W - (cols - 1) * GAP) / 2, oy = (H - (rows - 1) * GAP) / 2;
@@ -317,7 +317,7 @@
       const amp = 0.5 + u * u * 6;
       ctx.save();
       ctx.globalAlpha = s < T_SHAKE ? 1 : 0;
-      ctx.fillStyle = '#111';
+      ctx.fillStyle = '#fff';
       ctx.font = word.font; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const jx = (Math.sin(s * 131) + Math.sin(s * 197 + 1)) * amp * 0.5;
       const jy = (Math.sin(s * 163 + 2) + Math.sin(s * 241 + 3)) * amp * 0.5;
@@ -325,7 +325,7 @@
       ctx.restore();
     }
 
-    ctx.fillStyle = '#111';
+    ctx.fillStyle = '#fff';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (const p of particles) {
       if (s < T_SHAKE) continue;
@@ -611,7 +611,7 @@
 
   // one thin line from J4J4J4 to every top-level word, nothing else is connected
   function drawLines() {
-    ctx.strokeStyle = '#111'; ctx.lineWidth = 1;
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
     for (const n of nodes) {
       if (n.depth !== 0 && !n.parent.def.linkKids) continue;
       const al = n.s * n.dim * pageFade;
@@ -633,7 +633,7 @@
   const TRACKS = {
     info:    'https://open.spotify.com/track/3mUDlIALLosWgmHtWjDBmK',
     history: 'https://open.spotify.com/track/2KylN9C0wNbzLgZNTG9oiU',
-    future:  'https://open.spotify.com/album/4Kkl3hh2pD8griFAUTIj9w'   // an album link: it plays the release (a single = just this track)
+    future:  'https://open.spotify.com/track/0lt9OFtRl1ajWZQTRoh6Of'
   };
 
   const CARDS = {
